@@ -143,6 +143,39 @@ static inline double _ran(ctr_type::value_type *const data) {
   return r123::u01fixedpt<double, ctr_type::value_type>(result[0]);
 }
 
+//---------------------------------------------------------------------------//
+/*! \brief Generate a random double.
+ *
+ * Given a pointer to RNG state data, this function returns a random double in
+ * the open interval (0, 1)---i.e., excluding the endpoints.
+ */
+static inline std::pair<double, double>
+_two_rans(ctr_type::value_type *const data) {
+  CBRNG rng;
+
+  // Assemble a counter from the first two elements in data.
+  ctr_type ctr = {{data[0], data[1]}};
+
+  // Assemble a key from the last two elements in data.
+  const key_type key = {{data[2], data[3]}};
+
+  // Invoke the counter-based rng.
+  const ctr_type result = rng(ctr, key);
+
+  // Increment the counter.
+  ctr.incr();
+
+  // Copy the updated counter back into data.
+  data[0] = ctr[0];
+  data[1] = ctr[1];
+
+  // Convert the first 64 bits of the RNG output into a double-precision value
+  // in the open interval (0, 1) and return it.
+  return std::make_pair(
+      r123::u01fixedpt<double, ctr_type::value_type>(result[0]),
+      r123::u01fixedpt<double, ctr_type::value_type>(result[1]));
+}
+
 } // namespace
 
 //===========================================================================//
@@ -170,6 +203,11 @@ public:
 
   //! Return a random double in the open interval (0, 1).
   double ran() const { return _ran(data.access()); }
+
+  //! Return two random doubles in the open interval (0, 1).
+  std::pair<double, double> two_rans() const {
+    return _two_rans(data.access());
+  }
 
   //! Spawn a new, independent generator from this reference.
   inline void spawn(Counter_RNG &new_gen) const;
@@ -242,6 +280,9 @@ public:
 
   //! Return a random double in the interval (0, 1).
   double ran() const { return _ran(data); }
+
+  //! Return two random doubles in the open interval (0, 1).
+  std::pair<double, double> two_rans() const { return _two_rans(data); }
 
   //! Spawn a new, independent generator from this one.
   void spawn(Counter_RNG &new_gen) const { new_gen._spawn(data); }
