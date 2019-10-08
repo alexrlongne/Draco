@@ -23,19 +23,34 @@ int get_num_recv(Invert_Comm_Map_t::const_iterator first,
   const int my_proc = rtt_c4::node();
   Remember(const int num_procs = rtt_c4::nodes());
   const int one = 1;
-  int num_recv(0); // return value
+
+  // pointer that will be allocated by MPI_Win_allocate
+  int *num_recv_win;
 
   // Create the RMA memory windows for each value
   MPI_Win win;
-  MPI_Win_create(&num_recv, 1 * sizeof(int), sizeof(int), MPI_INFO_NULL,
-                 MPI_COMM_WORLD, &win);
+  MPI_Info info;
+  MPI_Info_create(&info);
+  // let MPI know that the accumulate will be on a single value to enable
+  // network atomics
+  MPI_Info_set(info, "accumulate_ops", "same_op");
+  MPI_Info_set(info, "same_size", "true");
+  MPI_Info_set(info, "same_disp", "true");
 
-  // Assertion value for fences.  Currently, we effectively don't set
-  // anything (zero).
-  const int fence_assert = 0;
+  int mpi_int_size;
+  MPI_Type_size(MPI_INT, &mpi_int_size);
+  MPI_Win_allocate(mpi_int_size, mpi_int_size, info, MPI_COMM_WORLD, &num_recv_win, &win);
+
+  *num_recv_win = 0;
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  // use use MPI_MODE_NOCHECK because there will be no conflicting locks on this
+  // window
+  const int lock_assert=MPI_MODE_NOCHECK;
+
+  MPI_Win_lock_all(lock_assert, win);
 
   // Accumulate the local and remote data values
-  MPI_Win_fence(fence_assert, win);
   for (auto it = first; it != last; ++it) {
     Require(it->first >= 0);
     Require(it->first < num_procs);
@@ -45,9 +60,13 @@ int get_num_recv(Invert_Comm_Map_t::const_iterator first,
                      MPI_Traits<int>::element_type(), MPI_SUM, win);
     }
   }
-  MPI_Win_fence(fence_assert, win);
-  MPI_Win_free(&win);
+  MPI_Win_unlock_all(win);
+  MPI_Barrier(MPI_COMM_WORLD);
 
+  // pull out value before deallocating
+  int num_recv = *num_recv_win;
+  MPI_Win_free(&win);
+  MPI_Info_free(&info);
   Ensure(num_recv >= 0 && num_recv < num_procs);
   return num_recv;
 }

@@ -51,6 +51,9 @@ def write_data_for_id(filename, data_start_index, num_entries, new_values):
 ################################################################################
 
 ################################################################################
+# Note: length of grid is n_T*n_rho*n_groups. Opacity values are evaluated at
+# temperature and density points and group midpoints (opacity(rho_i, T_i,
+# (hnu_i + hnu_i+1)/2))
 def interpolate_mg_opacity_data(T_grid, rho_grid, hnu_grid, op_data, \
     target_rho, target_T, print_str=""):
   n_rho = len(rho_grid)
